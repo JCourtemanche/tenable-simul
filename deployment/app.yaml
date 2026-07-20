@@ -1,0 +1,16 @@
+runtime: python311
+instance_class: F1
+
+env_variables:
+  DEBUG: "False"
+  TENABLE_ACCESS_KEY: "tenable-access-key"
+  TENABLE_SECRET_KEY: "tenable-secret-key"
+
+handlers:
+  - url: /.*
+    script: auto
+    secure: always
+
+automatic_scaling:
+  min_instances: 0
+  max_instances: 2

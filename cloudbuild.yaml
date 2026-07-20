@@ -1,0 +1,15 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/tenable-simulator/tenable-simulator:latest'
+      - '-f'
+      - 'deployment/Dockerfile'
+      - '.'
+
+images:
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/tenable-simulator/tenable-simulator:latest'
+
+substitutions:
+  _REGION: europe-west1
