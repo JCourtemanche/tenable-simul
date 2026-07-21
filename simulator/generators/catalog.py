@@ -3,7 +3,6 @@ from config import Config
 
 from .assets import build_assets_catalog
 from .audit_logs import build_audit_logs
-from .exports import ExportStore
 from .scans import ScanStore, build_scan_filters
 from .vulnerabilities import build_vulnerability_catalog
 
@@ -13,9 +12,6 @@ ASSETS = build_assets_catalog(VULNERABILITIES, extra_count=Config.EXTRA_ASSETS)
 AUDIT_LOGS = build_audit_logs(count=Config.AUDIT_LOG_COUNT)
 SCAN_STORE = ScanStore()
 SCAN_FILTERS = build_scan_filters()
-
-ASSETS_EXPORT = ExportStore(kind='assets')
-VULNS_EXPORT = ExportStore(kind='vulns')
 
 VULNERABILITIES_BY_PLUGIN_ID = {v['plugin_id']: v for v in VULNERABILITIES}
 VULNERABILITIES_BY_CVE = {v['cve']: v for v in VULNERABILITIES}

@@ -1,53 +1,37 @@
 """
-Stateful export job store for /assets/export and /vulns/export.
+Export job "store" for /assets/export and /vulns/export.
 
-Each export starts as QUEUED, transitions to PROCESSING on the next poll,
-and to FINISHED after Config.EXPORT_POLLS_TO_FINISH polls - simulating a
-real Tenable export that takes a few polling cycles.
+DESIGN NOTE - stateless on purpose:
+  Gunicorn runs 4 worker processes by default, and Cloud Run also autoscales
+  across container instances. Anything we put in a Python dict is per-worker,
+  so a POST /export followed by a GET /export/<uuid>/status routed to a
+  different worker would 404 with "unknown export UUID".
+
+  Rather than plug in Redis for a demo, we simply:
+    - accept any well-formed UUIDv4 (or any 36-char hyphenated string) on
+      /status and /chunks
+    - always return status = FINISHED with chunks_available = [1] on /status
+    - always serve the same static chunk data on /chunks/<id>
+
+  Downside: no QUEUED / PROCESSING transitions. The demo runs faster in
+  return - the pack polls once, gets FINISHED, downloads chunks.
 """
-from threading import Lock
-
-from config import Config
+import re
+import uuid as _uuid
 
 from .base import new_uuid
 
 
-class ExportStore:
-    def __init__(self, kind):
-        self.kind = kind  # 'assets' or 'vulns'
-        self._lock = Lock()
-        self._jobs = {}  # uuid -> {status, polls, chunks_available, chunk_size, num_assets, filters}
+_UUID_RE = re.compile(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+)
 
-    def create(self, payload):
-        uuid_ = new_uuid()
-        with self._lock:
-            self._jobs[uuid_] = {
-                'uuid': uuid_,
-                'status': 'QUEUED',
-                'polls': 0,
-                'chunk_size': payload.get('chunk_size', 5000) if self.kind == 'assets' else None,
-                'num_assets': payload.get('num_assets', 500) if self.kind == 'vulns' else None,
-                'filters': payload.get('filters') or {},
-                'chunks_available': [],
-            }
-        return uuid_
 
-    def get_status(self, uuid_):
-        with self._lock:
-            job = self._jobs.get(uuid_)
-            if job is None:
-                return None
-            job['polls'] += 1
-            if job['status'] == 'QUEUED' and job['polls'] >= 1:
-                job['status'] = 'PROCESSING'
-            if job['status'] == 'PROCESSING' and job['polls'] >= Config.EXPORT_POLLS_TO_FINISH:
-                job['status'] = 'FINISHED'
-                job['chunks_available'] = [1]  # single chunk (all data)
-            return {
-                'status': job['status'],
-                'chunks_available': job['chunks_available'],
-                'total_chunks': len(job['chunks_available']),
-            }
+def create_export_uuid() -> str:
+    """Return a fresh export UUID to hand back on POST /export."""
+    return new_uuid()
 
-    def has(self, uuid_):
-        return uuid_ in self._jobs
+
+def is_valid_export_uuid(uuid_str: str) -> bool:
+    """Accept any UUIDv4-shaped string as a valid export identifier."""
+    return bool(uuid_str) and bool(_UUID_RE.match(str(uuid_str)))
